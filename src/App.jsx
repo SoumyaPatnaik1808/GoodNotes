@@ -47,12 +47,7 @@ const App = () => {
             <Login />
           }
         />
-        <Route
-          path="/recovery"
-          element={
-            <Recovery />
-          }
-        />
+       
         <Route
           path="/dashboard"
           element={
