@@ -1,52 +1,18 @@
 const express = require("express");
-const { getDb, saveDatabase } = require("../db");
+const db = require("../db");
 const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
 
-// Helper to get multiple rows from sql.js
-function getAll(db, sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) {
-    const columns = stmt.getColumnNames();
-    const values = stmt.get();
-    const row = {};
-    columns.forEach((col, i) => {
-      row[col] = values[i];
-    });
-    rows.push(row);
-  }
-  stmt.free();
-  return rows;
-}
-
-// Helper to get one row
-function getOne(db, sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  if (stmt.step()) {
-    const columns = stmt.getColumnNames();
-    const values = stmt.get();
-    stmt.free();
-    const row = {};
-    columns.forEach((col, i) => {
-      row[col] = values[i];
-    });
-    return row;
-  }
-  stmt.free();
-  return null;
-}
-
 // GET all notes for user
-router.get("/", authMiddleware, (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
-    const db = getDb();
     const userId = req.user.id;
-    const notes = getAll(db, "SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC", [userId]);
-    res.json(notes);
+    const { rows } = await db.query(
+      "SELECT * FROM notes WHERE user_id = $1 ORDER BY updated_at DESC",
+      [userId]
+    );
+    res.json(rows);
   } catch (err) {
     console.error("Fetch notes error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -54,9 +20,8 @@ router.get("/", authMiddleware, (req, res) => {
 });
 
 // POST create note
-router.post("/", authMiddleware, (req, res) => {
+router.post("/", authMiddleware, async (req, res) => {
   try {
-    const db = getDb();
     const userId = req.user.id;
     const { title, content, color } = req.body;
 
@@ -64,14 +29,11 @@ router.post("/", authMiddleware, (req, res) => {
       return res.status(400).json({ error: "Note title is required" });
     }
 
-    db.run(
-      "INSERT INTO notes (user_id, title, content, is_favorite, color) VALUES (?, ?, ?, 0, ?)",
+    const { rows } = await db.query(
+      "INSERT INTO notes (user_id, title, content, is_favorite, color) VALUES ($1, $2, $3, 0, $4) RETURNING *",
       [userId, title, content || "", color || "#6366f1"]
     );
-    saveDatabase();
-
-    const newNote = getOne(db, "SELECT * FROM notes WHERE user_id = ? ORDER BY id DESC LIMIT 1", [userId]);
-    res.status(201).json(newNote);
+    res.status(201).json(rows[0]);
   } catch (err) {
     console.error("Create note error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -79,14 +41,18 @@ router.post("/", authMiddleware, (req, res) => {
 });
 
 // PUT update note
-router.put("/:id", authMiddleware, (req, res) => {
+router.put("/:id", authMiddleware, async (req, res) => {
   try {
-    const db = getDb();
     const userId = req.user.id;
     const noteId = req.params.id;
     const { title, content, is_favorite, color } = req.body;
 
-    const note = getOne(db, "SELECT * FROM notes WHERE id = ? AND user_id = ?", [noteId, userId]);
+    // Check if note exists and belongs to user
+    const checkRes = await db.query(
+      "SELECT * FROM notes WHERE id = $1 AND user_id = $2",
+      [noteId, userId]
+    );
+    const note = checkRes.rows[0];
     if (!note) {
       return res.status(404).json({ error: "Note not found" });
     }
@@ -96,14 +62,11 @@ router.put("/:id", authMiddleware, (req, res) => {
     const updatedFavorite = is_favorite !== undefined ? (is_favorite ? 1 : 0) : note.is_favorite;
     const updatedColor = color !== undefined ? color : note.color;
 
-    db.run(
-      "UPDATE notes SET title = ?, content = ?, is_favorite = ?, color = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+    const { rows } = await db.query(
+      "UPDATE notes SET title = $1, content = $2, is_favorite = $3, color = $4, updated_at = NOW() WHERE id = $5 AND user_id = $6 RETURNING *",
       [updatedTitle, updatedContent, updatedFavorite, updatedColor, noteId, userId]
     );
-    saveDatabase();
-
-    const updatedNote = getOne(db, "SELECT * FROM notes WHERE id = ?", [noteId]);
-    res.json(updatedNote);
+    res.json(rows[0]);
   } catch (err) {
     console.error("Update note error:", err);
     res.status(500).json({ error: "Internal server error" });
@@ -111,20 +74,21 @@ router.put("/:id", authMiddleware, (req, res) => {
 });
 
 // DELETE note
-router.delete("/:id", authMiddleware, (req, res) => {
+router.delete("/:id", authMiddleware, async (req, res) => {
   try {
-    const db = getDb();
     const userId = req.user.id;
     const noteId = req.params.id;
 
-    const note = getOne(db, "SELECT * FROM notes WHERE id = ? AND user_id = ?", [noteId, userId]);
-    if (!note) {
+    // Check if note exists and belongs to user
+    const checkRes = await db.query(
+      "SELECT id FROM notes WHERE id = $1 AND user_id = $2",
+      [noteId, userId]
+    );
+    if (checkRes.rows.length === 0) {
       return res.status(404).json({ error: "Note not found" });
     }
 
-    db.run("DELETE FROM notes WHERE id = ? AND user_id = ?", [noteId, userId]);
-    saveDatabase();
-
+    await db.query("DELETE FROM notes WHERE id = $1 AND user_id = $2", [noteId, userId]);
     res.json({ message: "Note deleted successfully" });
   } catch (err) {
     console.error("Delete note error:", err);

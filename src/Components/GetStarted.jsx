@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { API_URL } from '../config';
+import { VITE_API_URL } from '../config';
 
 export default function GetStarted() {
   const navigate = useNavigate();

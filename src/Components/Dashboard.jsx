@@ -12,12 +12,10 @@ import {
   Menu,
   X,
   CheckSquare,
-  Search,
   Trash2,
   FileText,
-  Heart
 } from 'lucide-react';
-import { API_URL } from '../config';
+import { VITE_API_URL } from '../config';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -337,12 +335,11 @@ export default function Dashboard() {
 
   
   const todayTasks = tasks.filter(t => t.due_bucket === 'today');
-  const upcomingTasks = tasks.filter(t => t.due_bucket === 'upcoming');
-  const somedayTasks = tasks.filter(t => t.due_bucket === 'someday');
+
 
   
-  const totalTasksCount = tasks.length;
-  const completedTasksCount = tasks.filter(t => t.completed === 1).length;
+  const totalTasksCount = todayTasks.length;
+  const completedTasksCount = todayTasks.filter(t => t.completed === 1).length;
   const completionPercentage = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
   

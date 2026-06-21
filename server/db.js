@@ -1,83 +1,54 @@
+const { Pool } = require("pg");
 
-
-const initSqlJs = require("sql.js");
-const fs = require("fs");
-const path = require("path");
-
-const DB_PATH = path.join(__dirname, "goodnotes.db");
-
-let db = null;
-
-
-function saveDatabase() {
-  if (db) {
-    const data = db.export();                       
-    const buffer = Buffer.from(data);                
-    fs.writeFileSync(DB_PATH, buffer);              
-  }
-}
-
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false, // Required for Neon Postgres connection
+  },
+});
 
 async function initDatabase() {
- 
-  const SQL = await initSqlJs();
-
- 
-  if (fs.existsSync(DB_PATH)) {
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    
-    db = new SQL.Database();
-  }
-
-  
-  db.run(`
+  // Create tables using PostgreSQL syntax
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      full_name  TEXT    NOT NULL,
-      email      TEXT    NOT NULL UNIQUE,
-      password   TEXT    NOT NULL,
-      created_at TEXT    DEFAULT (datetime('now'))
-    )
+      id         SERIAL PRIMARY KEY,
+      full_name  VARCHAR(255) NOT NULL,
+      email      VARCHAR(255) NOT NULL UNIQUE,
+      password   VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id     INTEGER NOT NULL,
-      title       TEXT    NOT NULL,
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       VARCHAR(255) NOT NULL,
       completed   INTEGER DEFAULT 0,
-      due_bucket  TEXT    DEFAULT 'today',
-      duration    TEXT,
-      tag         TEXT,
-      created_at  TEXT    DEFAULT (datetime('now')),
-      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
+      due_bucket  VARCHAR(50) DEFAULT 'today',
+      duration    VARCHAR(50),
+      tag         VARCHAR(50),
+      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS notes (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id     INTEGER NOT NULL,
-      title       TEXT    NOT NULL,
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       VARCHAR(255) NOT NULL,
       content     TEXT,
       is_favorite INTEGER DEFAULT 0,
-      color       TEXT    DEFAULT '#6366f1',
-      created_at  TEXT    DEFAULT (datetime('now')),
-      updated_at  TEXT    DEFAULT (datetime('now')),
-      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-    )
+      color       VARCHAR(50) DEFAULT '#6366f1',
+      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
-
-  saveDatabase();
-
-  return db;
 }
 
-
 module.exports = {
-  initDatabase,   
-  getDb: () => db, 
-  saveDatabase,   
+  pool,
+  query: (text, params) => pool.query(text, params),
+  initDatabase,
+  saveDatabase: () => {}, // No-op helper to maintain backward compatibility during migration
 };

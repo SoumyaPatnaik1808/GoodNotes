@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
-import { API_URL } from '../config';
+import { VITE_API_URL } from '../config';
 
 export default function Login() {
   const navigate = useNavigate();
