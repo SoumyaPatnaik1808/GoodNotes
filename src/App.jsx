@@ -4,7 +4,6 @@ import Navbar from "./Components/navbar";
 import Landing from "./Components/Landing";
 import GetStarted from "./Components/GetStarted";
 import Login from "./Components/Login";
-import Recovery from "./Components/Recovery";
 import Dashboard from "./Components/Dashboard";
 
 const App = () => {
